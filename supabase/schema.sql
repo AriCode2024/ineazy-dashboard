@@ -6,8 +6,10 @@
 
 -- ------------------------------------------------------------
 -- Drop old orders scaffolding (Phase 1 leftovers)
+-- `drop table ... cascade` removes any RLS policies attached to it,
+-- so we don't need a separate policy drop (which would require the
+-- table to exist).
 -- ------------------------------------------------------------
-drop policy if exists "Users can view own orders" on public.orders;
 drop table if exists public.orders cascade;
 
 -- ------------------------------------------------------------
