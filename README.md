@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# User Dashboard
 
-## Getting Started
+A separate Next.js app for the logged-in user area (login, orders, profile, status). Lives on its own subdomain (e.g. `app.yoursite.com`) and is linked to from the marketing Webflow site.
 
-First, run the development server:
+## Stack
+
+- **Next.js 15** (App Router, TypeScript, Tailwind v4)
+- **Supabase** — Postgres database + auth (free tier covers you while starting)
+- **Vercel** — hosting (free)
+
+## First-time setup
+
+Do these steps once, in order.
+
+### 1. Create a Supabase project
+
+1. Go to <https://supabase.com>, sign up, click **New project**.
+2. Pick any name and a strong DB password (save it). Region: closest to your users.
+3. Wait ~1 min for it to provision.
+
+### 2. Run the schema
+
+1. In Supabase, open **SQL Editor** (left sidebar) → **New query**.
+2. Open `supabase/schema.sql` from this repo, copy the whole file, paste it in.
+3. Click **Run**. You should see "Success. No rows returned."
+
+This creates the `profiles` and `orders` tables and the row-level security rules so each user only sees their own data.
+
+### 3. Wire up env vars
+
+1. In Supabase, go to **Project settings → API**.
+2. Copy **Project URL** and **anon public** key.
+3. In this repo, copy `.env.local.example` to `.env.local` and paste the two values in.
+
+### 4. (Dev only) Disable email confirmation
+
+So you can sign up and immediately log in without checking email:
+
+- Supabase → **Authentication → Providers → Email** → turn **off** "Confirm email" → save.
+
+Re-enable this before you go to production.
+
+### 5. Run it
 
 ```bash
+npm install --legacy-peer-deps
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>. You'll be redirected to `/login`. Click **Sign up**, create an account, log in.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The dashboard will be empty (no orders yet). To see data, follow the "seed a fake order" block at the bottom of `supabase/schema.sql`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Linking from Webflow
 
-## Learn More
+Once deployed (e.g. to Vercel at `app.yoursite.com`), in your Webflow site:
 
-To learn more about Next.js, take a look at the following resources:
+1. Add a **Login** / **My Account** button in the nav.
+2. Set its URL to `https://app.yoursite.com/login` (or just `https://app.yoursite.com` — it auto-redirects).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+That's it. Users click it from Webflow, land in the Next.js app, log in, and see their dashboard.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## What you might want to change
 
-## Deploy on Vercel
+The defaults are guesses since we didn't pin down requirements:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Order fields** (`supabase/schema.sql`): currently `order_number`, `status`, `items` (JSON), `total`, `tracking_url`, `notes`. Add/remove columns to fit your actual product.
+- **Status values**: `pending / processing / shipped / completed / cancelled`. Edit the `check` constraint in the schema if you sell services or subscriptions instead of physical goods.
+- **Profile fields**: `full_name`, `phone`, `address`. Add whatever else you want (company, tax ID, etc.).
+- **Branding**: colors are basic black/gray. Edit Tailwind classes in `app/(dashboard)/layout.tsx` and the pages to match your Webflow theme.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project structure
+
+```
+app/
+├── login/                  ← log in form
+├── signup/                 ← create account
+├── (dashboard)/            ← everything below requires login
+│   ├── layout.tsx          ← sidebar nav + sign out
+│   ├── dashboard/          ← overview + recent orders
+│   ├── orders/             ← full orders list
+│   └── profile/            ← edit profile
+├── layout.tsx              ← root html
+└── page.tsx                ← redirects to /login or /dashboard
+
+lib/supabase/               ← Supabase client setup (3 flavors)
+middleware.ts               ← redirects unauthed users to /login
+components/status-badge.tsx ← shared UI bit
+supabase/schema.sql         ← run this in Supabase once
+```
+
+## Deploying
+
+1. Push this folder to a GitHub repo.
+2. Import it on <https://vercel.com> → New Project.
+3. Add the same two env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) under **Settings → Environment Variables**.
+4. Deploy. Add your custom domain (e.g. `app.yoursite.com`) under **Settings → Domains**.
