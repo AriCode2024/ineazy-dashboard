@@ -6,17 +6,23 @@ export default async function AdminProjectsPage() {
 
   const { data: projects } = await supabase
     .from('projects')
-    .select(
-      `
-      id,
-      name,
-      location,
-      est_handover,
-      created_at,
-      client:profiles!projects_client_id_fkey(email, full_name)
-    `
-    )
+    .select('id, name, location, est_handover, created_at, client_id')
     .order('created_at', { ascending: false })
+
+  const clientIds = Array.from(
+    new Set((projects ?? []).map((p) => p.client_id))
+  )
+
+  const { data: profiles } = clientIds.length
+    ? await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', clientIds)
+    : { data: [] }
+
+  const profileById = new Map(
+    (profiles ?? []).map((p) => [p.id, p])
+  )
 
   return (
     <div className="max-w-5xl">
@@ -35,7 +41,7 @@ export default async function AdminProjectsPage() {
             </thead>
             <tbody>
               {projects.map((p) => {
-                const client = Array.isArray(p.client) ? p.client[0] : p.client
+                const client = profileById.get(p.client_id)
                 return (
                   <tr
                     key={p.id}

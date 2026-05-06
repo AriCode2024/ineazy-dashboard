@@ -13,29 +13,23 @@ export default async function AdminProjectPage({
 
   const { data: project } = await supabase
     .from('projects')
-    .select(
-      `
-      id,
-      name,
-      location,
-      est_handover,
-      client:profiles!projects_client_id_fkey(email, full_name)
-    `
-    )
+    .select('id, name, location, est_handover, client_id')
     .eq('id', id)
     .single()
 
   if (!project) notFound()
+
+  const { data: client } = await supabase
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', project.client_id)
+    .single()
 
   const { data: tasks } = await supabase
     .from('project_tasks')
     .select('id, name, status, notes, est_date, started_at, completed_at, order_index')
     .eq('project_id', id)
     .order('order_index', { ascending: true })
-
-  const client = Array.isArray(project.client)
-    ? project.client[0]
-    : project.client
 
   return (
     <div className="max-w-3xl">
@@ -49,7 +43,7 @@ export default async function AdminProjectPage({
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">{project.name}</h1>
         <p className="text-sm text-gray-600 mt-1">
-          {client?.full_name ?? client?.email}
+          {client?.full_name ?? client?.email ?? '—'}
           {project.location && ` · ${project.location}`}
           {project.est_handover &&
             ` · Handover ${new Date(project.est_handover).toLocaleDateString()}`}
