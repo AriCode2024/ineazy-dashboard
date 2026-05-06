@@ -1,86 +1,116 @@
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { StatusBadge } from '@/components/status-badge'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('id, order_number, status, total, created_at')
-    .order('created_at', { ascending: false })
-    .limit(5)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const stats = {
-    total: orders?.length ?? 0,
-    pending: orders?.filter((o) => o.status === 'pending').length ?? 0,
-    completed: orders?.filter((o) => o.status === 'completed').length ?? 0,
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id, name, location, started_at, est_handover')
+    .eq('client_id', user!.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const project = projects?.[0]
+
+  if (!project) {
+    return (
+      <div className="max-w-2xl">
+        <h1 className="text-2xl font-semibold mb-4">Welcome</h1>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+          <p className="text-gray-600">
+            Your project hasn&apos;t been set up yet.
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Our team will configure it shortly. You&apos;ll see your timeline
+            here once it&apos;s ready.
+          </p>
+        </div>
+      </div>
+    )
   }
 
+  const { data: tasks } = await supabase
+    .from('project_tasks')
+    .select('id, name, status, notes, est_date, started_at, completed_at, order_index')
+    .eq('project_id', project.id)
+    .order('order_index', { ascending: true })
+
+  const tasksList = tasks ?? []
+  const completed = tasksList.filter((t) => t.status === 'completed').length
+  const total = tasksList.length
+  const pct = total ? Math.round((completed / total) * 100) : 0
+
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-6">Welcome back</h1>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <StatCard label="Total orders" value={stats.total} />
-        <StatCard label="Pending" value={stats.pending} />
-        <StatCard label="Completed" value={stats.completed} />
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="font-semibold">Recent orders</h2>
-          <Link href="/orders" className="text-sm underline text-gray-600">
-            View all
-          </Link>
-        </div>
-        {orders && orders.length > 0 ? (
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
-                <th className="px-6 py-3 font-medium">Order</th>
-                <th className="px-6 py-3 font-medium">Date</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
-                >
-                  <td className="px-6 py-3 font-mono text-sm">
-                    {order.order_number}
-                  </td>
-                  <td className="px-6 py-3 text-sm text-gray-600">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-3">
-                    <StatusBadge status={order.status} />
-                  </td>
-                  <td className="px-6 py-3 text-right font-medium">
-                    ${Number(order.total).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-12 text-center text-gray-500 text-sm">
-            No orders yet.
-          </div>
+    <div className="max-w-3xl">
+      <header className="mb-8">
+        <h1 className="text-2xl font-semibold">{project.name}</h1>
+        {project.location && (
+          <p className="text-sm text-gray-600 mt-1">{project.location}</p>
         )}
-      </div>
-    </div>
-  )
-}
+        <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="text-gray-700">
+              {completed} of {total} stages complete
+            </span>
+            <span className="font-medium text-gray-900">{pct}%</span>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-500 rounded-full transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {project.est_handover && (
+            <p className="text-xs text-gray-500 mt-3">
+              Estimated handover:{' '}
+              {new Date(project.est_handover).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      </header>
 
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-3xl font-semibold mt-1">{value}</p>
+      <ol className="space-y-3">
+        {tasksList.map((task) => (
+          <li
+            key={task.id}
+            className={`bg-white rounded-lg border p-4 ${
+              task.status === 'in_progress'
+                ? 'border-amber-300 ring-1 ring-amber-200'
+                : 'border-gray-200'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <h3 className="font-medium">{task.name}</h3>
+                {task.notes && (
+                  <p className="text-sm text-gray-600 mt-1">{task.notes}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  {task.status === 'completed' && task.completed_at
+                    ? `Completed ${new Date(task.completed_at).toLocaleDateString()}`
+                    : task.status === 'in_progress' && task.started_at
+                    ? `Started ${new Date(task.started_at).toLocaleDateString()}`
+                    : task.est_date
+                    ? `Estimated ${new Date(task.est_date).toLocaleDateString()}`
+                    : null}
+                </p>
+              </div>
+              <StatusBadge status={task.status} />
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {tasksList.length === 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-sm text-gray-500">
+          No stages added yet.
+        </div>
+      )}
     </div>
   )
 }
